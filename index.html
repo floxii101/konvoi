@@ -52,6 +52,7 @@
   /* Map */
   #map{position:absolute;inset:0;background:#0E1115}
   .leaflet-container{background:#0E1115;font-family:Inter,sans-serif}
+  .dark-tiles{filter:invert(1) hue-rotate(180deg) brightness(.85) contrast(.9) saturate(.4)}
   .leaflet-control-attribution{background:rgba(11,13,16,.7)!important;color:#7d8590!important;font-size:9px!important}
   .leaflet-control-attribution a{color:#9AA3AE!important}
   .topbar{position:absolute;left:14px;right:14px;top:calc(12px + var(--safe-top));display:flex;gap:10px;align-items:center;z-index:500}
@@ -256,7 +257,7 @@ var COLORS = ['#C6F432', '#FF8A3D', '#4DA3FF', '#FF5FA2', '#B28CFF', '#3DDCB4'];
 var CODE_CHARS = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
 var SEND_EVERY_MS = 2000;
 var STALE_MS = 45000;
-var OVERPASS = ['https://overpass-api.de/api/interpreter', 'https://overpass.kumi.systems/api/interpreter'];
+var OVERPASS = ['https://overpass-api.de/api/interpreter', 'https://overpass.private.coffee/api/interpreter', 'https://maps.mail.ru/osm/tools/overpass/api/interpreter'];
 var KINDS = {
   tanken: { title: 'Tanken', needsPoi: true, label: 'Tankstelle',
     q: function (a, b) { return 'nwr["amenity"="fuel"](around:15000,' + a + ',' + b + ');'; } },
@@ -350,9 +351,10 @@ function readName() {
 function initMap(center) {
   if (map) { map.setView(center, 15); return; }
   map = L.map('map', { zoomControl: false, attributionControl: true }).setView(center, 15);
-  L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
-    maxZoom: 19, subdomains: 'abcd',
-    attribution: '&copy; OpenStreetMap &copy; CARTO'
+  // OpenStreetMap-Karte, per CSS-Filter dunkel gemacht (kein API-Schlüssel nötig)
+  L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    maxZoom: 19, className: 'dark-tiles',
+    attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
   }).addTo(map);
   map.on('dragstart', function () { S.follow = false; });
 }
@@ -682,7 +684,7 @@ function hideBanner() { $('banner').classList.add('hidden'); }
 
 /* ---------- POI-Suche (OpenStreetMap / Overpass) ---------- */
 function findPoi(kind, pos) {
-  var q = '[out:json][timeout:15];(' + KINDS[kind].q(pos.lat.toFixed(5), pos.lng.toFixed(5)) + ');out center 60;';
+  var q = '[out:json][timeout:8];(' + KINDS[kind].q(pos.lat.toFixed(5), pos.lng.toFixed(5)) + ');out center 60;';
   return overpass(q, 0).then(function (data) {
     var best = null, bestScore = Infinity;
     (data.elements || []).forEach(function (el) {
@@ -709,9 +711,14 @@ function findPoi(kind, pos) {
   });
 }
 function overpass(q, i) {
-  return fetch(OVERPASS[i], { method: 'POST', body: 'data=' + encodeURIComponent(q), headers: { 'Content-Type': 'application/x-www-form-urlencoded' } })
+  // jeder Server bekommt max. 9 s, dann kommt der nächste dran
+  var ctrl = typeof AbortController !== 'undefined' ? new AbortController() : null;
+  var timer = setTimeout(function () { if (ctrl) ctrl.abort(); }, 9000);
+  return fetch(OVERPASS[i], { method: 'POST', body: 'data=' + encodeURIComponent(q),
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, signal: ctrl ? ctrl.signal : undefined })
     .then(function (r) { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); })
-    .catch(function (e) { if (i + 1 < OVERPASS.length) return overpass(q, i + 1); throw e; });
+    .then(function (j) { clearTimeout(timer); return j; },
+      function (e) { clearTimeout(timer); if (i + 1 < OVERPASS.length) return overpass(q, i + 1); throw e; });
 }
 
 /* ---------- App-Ablauf ---------- */
