@@ -7,6 +7,11 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <title>Konvoi</title>
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" type="image/png" href="favicon.png">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<meta name="apple-mobile-web-app-title" content="Konvoi">
+<meta name="description" content="Fahrt zusammen mit Freunden: Live-Karte, Tempo und Stopps für die ganze Gruppe.">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Space+Grotesk:wght@500;700&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
@@ -153,6 +158,16 @@
   @keyframes up{from{transform:translateY(40px)}}
   .modal h2{margin:0;font-size:24px}
   .codebox{font-family:'Space Grotesk',sans-serif;font-size:44px;font-weight:700;letter-spacing:10px;text-align:center;padding:14px 0;border-radius:20px;background:rgba(198,244,50,.08);border:1px dashed rgba(198,244,50,.4);color:var(--accent)}
+  .installtip{display:flex;gap:12px;align-items:center;background:rgba(198,244,50,.07);border:1px solid rgba(198,244,50,.25);border-radius:18px;padding:12px 14px;font-size:13px;line-height:1.4;color:var(--text)}
+  .installtip .ti{width:36px;height:36px;border-radius:11px;background:rgba(198,244,50,.15);color:var(--accent);display:flex;align-items:center;justify-content:center;flex:none}
+  .installtip b{display:block;font-size:14px}
+  .installtip button{margin-left:auto;background:none;border:none;color:var(--muted);padding:6px;font-size:18px;line-height:1}
+  .acks{display:flex;gap:6px;flex-wrap:wrap;margin-top:6px}
+  .acks:empty{display:none}
+  .ack{display:flex;align-items:center;gap:6px;font-size:12px;font-weight:700;background:rgba(255,255,255,.07);border-radius:999px;padding:3px 9px 3px 3px;animation:drop .3s}
+  .ack i{width:18px;height:18px;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;font-style:normal;font-size:10px;color:#0B0D10;font-weight:800}
+  .banner .ok{background:rgba(255,255,255,.06);border:1px solid var(--line2);color:var(--text)}
+  .iconbtn.off{opacity:.55}
 </style>
 </head>
 <body>
@@ -202,6 +217,11 @@
     </div>
   </div>
 
+  <div class="installtip hidden" id="installTip">
+    <div class="ti"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 12v7a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-7"/><path d="M16 6l-4-4-4 4"/><path d="M12 2v13"/></svg></div>
+    <div><b>Als App installieren</b><span id="installTxt">In Safari auf „Teilen“ und dann „Zum Home-Bildschirm“ tippen.</span></div>
+    <button id="installClose" aria-label="Hinweis schließen">×</button>
+  </div>
   <button class="linkbtn" id="btnDemo">
     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 4l14 8-14 8z"/></svg>
     Erst mal Demo ausprobieren
@@ -220,6 +240,10 @@
       <span style="text-align:left"><b id="codeLbl">-----</b><small id="crewLbl">verbinde …</small></span>
     </button>
     <div class="spacer"></div>
+    <button class="iconbtn glass" id="btnVoice" aria-label="Sprachansagen an oder aus">
+      <svg id="voiceOn" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M11 5 6 9H3v6h3l5 4z"/><path d="M15.5 8.5a5 5 0 0 1 0 7"/><path d="M18.5 5.5a9 9 0 0 1 0 13"/></svg>
+      <svg id="voiceOff" class="hidden" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M11 5 6 9H3v6h3l5 4z"/><path d="m22 9-6 6M16 9l6 6"/></svg>
+    </button>
     <button class="iconbtn glass" id="btnFit" aria-label="Alle zeigen">
       <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="9" cy="8" r="3.5"/><path d="M2.5 20c.8-3.5 3.4-5.5 6.5-5.5s5.7 2 6.5 5.5"/><circle cx="17" cy="9" r="2.5"/><path d="M17 14.5c2.4 0 4 1.6 4.5 4.5"/></svg>
     </button>
@@ -229,9 +253,10 @@
   </div>
 
   <div class="banner glass hidden" id="banner">
-    <div class="head"><div class="b-ic" id="bIcon"></div><div><div class="t" id="bTitle"></div><div class="s" id="bSub"></div></div></div>
+    <div class="head"><div class="b-ic" id="bIcon"></div><div><div class="t" id="bTitle"></div><div class="s" id="bSub"></div><div class="acks" id="bAcks"></div></div></div>
     <div class="acts">
       <a class="go hidden" id="bNav" target="_blank" rel="noopener"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 11 21 3l-8 18-2-8z"/></svg>Navigieren</a>
+      <button class="ok hidden" id="bOk"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12l5 5L20 7"/></svg>Bin dabei</button>
       <button class="done" id="bDone">Erledigt</button>
     </div>
   </div>
@@ -288,6 +313,16 @@
   </div>
 </div>
 
+<!-- Modal: Treffpunkt -->
+<div class="modal hidden" id="meetModal">
+  <div class="box">
+    <h2>Treffpunkt hier setzen?</h2>
+    <p class="sub" id="meetTxt">Alle in der Gruppe sehen den Punkt auf der Karte und können direkt dorthin navigieren.</p>
+    <button class="btn btn-primary" id="meetYes" style="background:#3DDCB4;box-shadow:0 8px 28px rgba(61,220,180,.25)">Treffpunkt setzen</button>
+    <button class="btn btn-ghost" id="meetNo">Abbrechen</button>
+  </div>
+</div>
+
 <!-- Modal: end trip -->
 <div class="modal hidden" id="endModal">
   <div class="box">
@@ -324,7 +359,8 @@ var KINDS = {
   essen: { title: 'Essen', needsPoi: true, label: 'Restaurant',
     q: function (a, b) { return 'nwr["amenity"~"restaurant|fast_food"](around:10000,' + a + ',' + b + ');'; } },
   warten: { title: 'Wartet', needsPoi: false, label: '' },
-  panne: { title: 'Panne', needsPoi: false, label: 'Panne', warn: true }
+  panne: { title: 'Panne', needsPoi: false, label: 'Panne', warn: true },
+  treffpunkt: { title: 'Treffpunkt', needsPoi: false, label: 'Treffpunkt' }
 };
 
 /* ---------- Zustand ---------- */
@@ -408,7 +444,10 @@ function initStart() {
 function readName() {
   var n = $('name').value.trim();
   if (!n) { toast('Gib zuerst deinen Namen ein'); $('name').focus(); return false; }
-  S.me.name = n.slice(0, 16); store('name', S.me.name); return true;
+  S.me.name = n.slice(0, 16); store('name', S.me.name);
+  // iOS gibt Sprachausgabe nur nach einem Tipp frei: einmal leise anstoßen
+  try { if ('speechSynthesis' in window) { var u = new SpeechSynthesisUtterance(' '); u.volume = 0; speechSynthesis.speak(u); } } catch (e) {}
+  return true;
 }
 
 /* ---------- Karte ---------- */
@@ -421,12 +460,19 @@ function initMap(center) {
     attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
   }).addTo(map);
   map.on('dragstart', function () { S.follow = false; });
+  map.on('contextmenu', function (e) {
+    if (!e || !e.latlng) return;
+    S.meetAt = { lat: e.latlng.lat, lng: e.latlng.lng };
+    $('meetTxt').textContent = 'Alle in der Gruppe sehen den Punkt auf der Karte' + (S.pos ? ' (' + fmtKm(hav(S.pos, S.meetAt)) + ' von dir)' : '') + ' und können direkt dorthin navigieren.';
+    $('meetModal').classList.remove('hidden');
+  });
 }
-var KCOL = { tanken: '#FFB547', pause: '#4DA3FF', essen: '#FF8A3D', warten: '#B28CFF', panne: '#FF6B4A' };
+var KCOL = { tanken: '#FFB547', pause: '#4DA3FF', essen: '#FF8A3D', warten: '#B28CFF', panne: '#FF6B4A', treffpunkt: '#3DDCB4' };
+var EXTRA_ICON = { treffpunkt: '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 21V4"/><path d="M5 4h12l-2 4 2 4H5"/></svg>' };
 function kindIcon(kind, size) {
   var b = document.querySelector('.qb[data-k="' + kind + '"] svg');
-  if (!b) return '';
-  var svg = b.outerHTML;
+  var svg = b ? b.outerHTML : (EXTRA_ICON[kind] || '');
+  if (!svg) return '';
   return size ? svg.replace(/width="22" height="22"/, 'width="' + size + '" height="' + size + '"') : svg;
 }
 function meIcon() {
@@ -650,6 +696,9 @@ function handle(d) {
     case 'alert':
       if (validAlert(d.a) && d.a.ts > S.clearedTs && (!S.alert || d.a.ts !== S.alert.ts)) showAlert(d.a, false);
       break;
+    case 'ack':
+      if (typeof d.ts === 'number' && typeof d.id === 'string') addAck(d.id, d.name, d.color, d.ts);
+      break;
     case 'clear':
       if (typeof d.ts !== 'number') return;
       S.clearedTs = Math.max(S.clearedTs, d.ts);
@@ -672,6 +721,16 @@ function upsertMember(m, fromPresence) {
   S.members[m.id] = n;
   drawMember(n);
   if (!fromPresence) renderCrew();
+}
+function checkGap(m) {
+  if (!S.pos || m.lat == null || Date.now() - m.ts > STALE_MS) return;
+  var d = hav(S.pos, m);
+  if (!S.gapWarned) S.gapWarned = {};
+  if (d > 2000 && !S.gapWarned[m.id]) {
+    S.gapWarned[m.id] = true;
+    toast(m.name + ' ist ' + fmtKm(d) + ' von dir entfernt', 4000);
+    say(m.name + ' ist über zwei Kilometer entfernt');
+  } else if (d < 1200 && S.gapWarned[m.id]) S.gapWarned[m.id] = false;
 }
 function removeMember(id) { delete S.members[id]; removeMarker(id); renderCrew(); }
 function setNet(ok, txt) {
@@ -708,11 +767,17 @@ function onQuick(kind) {
 }
 function publishAlert(a) {
   showAlert(a, false);
+  if (S.demo && a.kind !== 'treffpunkt') {
+    [['b1', 'Lena', '#FF8A3D', 1400], ['b2', 'Tim', '#4DA3FF', 2600], ['b3', 'Sara', '#FF5FA2', 4200]].forEach(function (b) {
+      setTimeout(function () { addAck(b[0], b[1], b[2], a.ts); }, b[3]);
+    });
+  }
   S.myAlert = a; trackMe();
   send({ t: 'alert', a: a });
 }
 function showAlert(a, quiet) {
   if (!a || !KINDS[a.kind]) return;
+  if (!S.alert || S.alert.ts !== a.ts) { S.acks = {}; S.acked = false; }
   S.alert = a;
   if (S.trip && ['tanken', 'pause', 'essen'].indexOf(a.kind) >= 0) S.trip.stops[a.kind] = (S.trip.stops[a.kind] || 0) + 1;
   var K = KINDS[a.kind];
@@ -721,6 +786,7 @@ function showAlert(a, quiet) {
   var title, sub;
   if (a.kind === 'warten') { title = mine ? 'Gruppe wartet auf dich' : a.fromName + ' liegt zurück'; sub = mine ? 'Alle sehen, dass sie langsamer machen sollen' : 'Bitte langsamer fahren oder warten'; }
   else if (a.kind === 'panne') { title = mine ? 'Panne gemeldet' : a.fromName + ' hat eine Panne!'; sub = mine ? 'Alle sehen deinen Standort' : 'Standort ist markiert. Haltet an, wenn es sicher ist.'; }
+  else if (a.kind === 'treffpunkt') { title = mine ? 'Treffpunkt gesetzt' : a.fromName + ' hat einen Treffpunkt gesetzt'; sub = 'Treffpunkt' + (S.pos && a.poi ? ' · ' + fmtKm(hav(S.pos, a.poi)) : ''); }
   else {
     var d = S.pos && a.poi ? ' · ' + fmtKm(hav(S.pos, a.poi)) : '';
     title = who + (mine ? ' willst' : ' will') + ' ' + (a.kind === 'tanken' ? 'tanken' : a.kind === 'essen' ? 'essen' : 'Pause machen');
@@ -734,6 +800,8 @@ function showAlert(a, quiet) {
   drawPoiLine();
   renderAlertState();
   if (!quiet && !mine) vibrate(K.warn ? [300, 120, 300, 120, 300] : [200, 100, 200]);
+  if (!quiet && !mine) say(title + '. ' + sub.replace(/ · /g, ', ').replace(/ km/, ' Kilometer').replace(/(\d),(\d)/, '$1 Komma $2'));
+  renderAcks();
   if (a.poi && !quiet) fitAll();
 }
 function drawPoiLine() {
@@ -752,7 +820,7 @@ function clearAlert(broadcast) {
     send({ t: 'clear', ts: old.ts });
     if (S.myAlert) { S.myAlert = null; trackMe(); }
   }
-  S.alert = null;
+  S.alert = null; S.acks = {}; S.acked = false; renderAcks();
   if (poiMarker) { map.removeLayer(poiMarker); poiMarker = null; }
   drawPoiLine(); hideBanner(); renderAlertState();
 }
@@ -771,7 +839,45 @@ function showBanner(t, s, kind, nav, loading) {
   bn.classList.toggle('loading', !!loading);
   if (bn.classList.contains('hidden')) { bn.classList.remove('hidden'); bn.style.animation = 'none'; void bn.offsetWidth; bn.style.animation = ''; }
   if (nav) { $('bNav').href = nav; $('bNav').classList.remove('hidden'); } else $('bNav').classList.add('hidden');
-  $('bDone').classList.toggle('hidden', !S.alert || !!loading);
+  var other = S.alert && S.alert.fromId !== S.me.id && !loading;
+  $('bOk').classList.toggle('hidden', !other || !!S.acked || S.alert.kind === 'treffpunkt');
+  $('bDone').classList.toggle('hidden', !S.alert || !!loading || (other && !S.acked && S.alert.kind !== 'treffpunkt'));
+}
+function renderAcks() {
+  var el = $('bAcks'); if (!el) return;
+  var ids = Object.keys(S.acks || {});
+  el.innerHTML = ids.map(function (id) {
+    var a = S.acks[id];
+    return '<span class="ack"><i style="background:' + esc(a.color) + '">' + esc(a.name.charAt(0).toUpperCase()) + '</i>' + esc(a.name) + ' ist dabei</span>';
+  }).join('');
+}
+function addAck(id, name, color, ts) {
+  if (!S.alert || S.alert.ts !== ts || id === S.me.id) return;
+  if (!S.acks) S.acks = {};
+  if (S.acks[id]) return;
+  S.acks[id] = { name: String(name || '?').slice(0, 16), color: /^#[0-9A-Fa-f]{6}$/.test(color) ? color : '#9AA3AE' };
+  renderAcks();
+  if (S.alert.fromId === S.me.id) vibrate(60);
+}
+function sendAck() {
+  if (!S.alert) return;
+  S.acked = true;
+  send({ t: 'ack', ts: S.alert.ts, id: S.me.id, name: S.me.name, color: S.me.color });
+  $('bOk').classList.add('hidden'); $('bDone').classList.remove('hidden');
+  toast('Die anderen sehen, dass du dabei bist');
+}
+/* ---------- Sprachansagen ---------- */
+function say(text) {
+  if (!S.voice || !('speechSynthesis' in window)) return;
+  try {
+    var u = new SpeechSynthesisUtterance(text); u.lang = 'de-DE'; u.rate = 1.02;
+    speechSynthesis.cancel(); speechSynthesis.speak(u);
+  } catch (e) {}
+}
+function setVoice(on) {
+  S.voice = on; store('voice', on ? '1' : '0');
+  $('voiceOn').classList.toggle('hidden', !on); $('voiceOff').classList.toggle('hidden', on);
+  $('btnVoice').classList.toggle('off', !on);
 }
 function hideBanner() { $('banner').classList.add('hidden'); }
 
@@ -874,10 +980,11 @@ function showApp() {
   }, 1000));
   S.timers.push(setInterval(function () {
     // veraltete Marker grau zeichnen
-    Object.keys(S.members).forEach(function (id) { drawMember(S.members[id]); });
+    Object.keys(S.members).forEach(function (id) { drawMember(S.members[id]); checkGap(S.members[id]); });
     renderCrew();
   }, 5000));
   requestWake();
+  if (load('meetTip') !== 'x') { setTimeout(function () { toast('Tipp: Lange auf die Karte drücken setzt einen Treffpunkt', 4500); }, 6000); store('meetTip', 'x'); }
   if (!S.demo) startGps(function (p) { map.setView([p.lat, p.lng], 15); });
 }
 function requestWake() {
@@ -1012,6 +1119,24 @@ function startDemo() {
 
 /* ---------- Verdrahtung ---------- */
 function wire() {
+  setVoice(load('voice') !== '0');
+  $('btnVoice').onclick = function () { setVoice(!S.voice); if (S.voice) say('Sprachansagen sind an'); };
+  $('bOk').onclick = sendAck;
+  $('meetNo').onclick = function () { $('meetModal').classList.add('hidden'); };
+  $('meetYes').onclick = function () {
+    $('meetModal').classList.add('hidden');
+    if (!S.meetAt) return;
+    publishAlert({ kind: 'treffpunkt', fromId: S.me.id, fromName: S.me.name, at: S.pos ? { lat: S.pos.lat, lng: S.pos.lng } : null,
+      poi: { lat: S.meetAt.lat, lng: S.meetAt.lng, name: 'Treffpunkt' }, ts: Date.now() });
+  };
+  // Installations-Hinweis (nur im Browser, nicht als installierte App)
+  var standalone = (window.matchMedia && matchMedia('(display-mode: standalone)').matches) || navigator.standalone;
+  if (!standalone && load('installTip') !== 'x') {
+    var ios = /iPhone|iPad|iPod/.test(navigator.userAgent);
+    if (!ios) $('installTxt').textContent = 'Im Browser-Menü auf „App installieren“ oder „Zum Startbildschirm“ tippen.';
+    $('installTip').classList.remove('hidden');
+  }
+  $('installClose').onclick = function () { $('installTip').classList.add('hidden'); store('installTip', 'x'); };
   $('btnGrab').onclick = function () { $('sheet').classList.toggle('compact'); };
   Array.prototype.forEach.call(document.querySelectorAll('.qb[data-k]'), function (b) {
     b.onclick = function () { onQuick(b.getAttribute('data-k')); };
