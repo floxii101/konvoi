@@ -652,7 +652,7 @@ function showAlert(a, quiet) {
   drawPoiLine();
   renderAlertState();
   if (!quiet && !mine) vibrate(K.warn ? [300, 120, 300, 120, 300] : [200, 100, 200]);
-  if (!mine && a.poi) fitAll();
+  if (a.poi && !quiet) fitAll();
 }
 function drawPoiLine() {
   if (!map) return;
