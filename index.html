@@ -305,6 +305,12 @@ function bearing(a, b) {
   return (Math.atan2(y, x) / r + 360) % 360;
 }
 function fmtKm(m) { return (m / 1000).toFixed(1).replace('.', ',') + ' km'; }
+function fmtClock(ms) {
+  // unter 1 Std: M:SS, darüber: H:MM:SS
+  var s = Math.floor(ms / 1000), h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60), sec = s % 60;
+  var p = function (n) { return (n < 10 ? '0' : '') + n; };
+  return h ? h + ':' + p(m) + ':' + p(sec) : m + ':' + p(sec);
+}
 function fmtDur(ms) {
   var s = Math.floor(ms / 1000), h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60);
   return h + ':' + (m < 10 ? '0' : '') + m;
@@ -729,8 +735,11 @@ function showApp() {
   initMap([50.3356, 6.9475]);
   setTimeout(function () { map.invalidateSize(); }, 50);
   renderCrew(); hideBanner(); renderAlertState();
+  $('time').textContent = '0:00';
   S.timers.push(setInterval(function () {
-    if (S.trip) $('time').textContent = fmtDur(Date.now() - S.trip.start);
+    if (S.trip) $('time').textContent = fmtClock(Date.now() - S.trip.start);
+  }, 1000));
+  S.timers.push(setInterval(function () {
     // veraltete Marker grau zeichnen
     Object.keys(S.members).forEach(function (id) { drawMember(S.members[id]); });
     renderCrew();
