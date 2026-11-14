@@ -621,7 +621,7 @@ function onQuick(kind) {
     a.poi = poi; publishAlert(a);
   }).catch(function () {
     btn.classList.remove('busy');
-    toast('Suche fehlgeschlagen. Versuch es gleich nochmal.'); hideBanner(); renderAlertState();
+    toast('Suche fehlgeschlagen (' + searchErrors.join(' · ') + ')', 8000); hideBanner(); renderAlertState();
   });
 }
 function publishAlert(a) {
@@ -689,42 +689,84 @@ function showBanner(t, s, warn, nav) {
 function hideBanner() { $('banner').classList.add('hidden'); }
 
 /* ---------- POI-Suche (OpenStreetMap / Overpass) ---------- */
+var NOMINATIM_Q = { tanken: 'fuel', pause: 'parking', essen: 'restaurant' };
+var searchErrors = [];
 function findPoi(kind, pos) {
-  var q = '[out:json][timeout:8];(' + KINDS[kind].q(pos.lat.toFixed(5), pos.lng.toFixed(5)) + ');out center 60;';
-  return overpass(q, 0).then(function (data) {
-    var best = null, bestScore = Infinity;
-    (data.elements || []).forEach(function (el) {
-      var lat = el.lat != null ? el.lat : (el.center && el.center.lat);
-      var lng = el.lon != null ? el.lon : (el.center && el.center.lon);
-      if (lat == null || lng == null) return;
-      var p = { lat: lat, lng: lng };
-      var d = hav(pos, p);
-      var score = d;
-      // Bevorzugt Ziele in Fahrtrichtung
-      if (pos.heading != null && !isNaN(pos.heading) && (pos.speed || 0) > 15) {
-        var diff = Math.abs(((bearing(pos, p) - pos.heading) + 540) % 360 - 180);
-        if (diff > 100) score *= 2.5; else if (diff > 60) score *= 1.4;
-      }
-      // Rastplätze leicht bevorzugen
-      if (kind === 'pause' && el.tags && el.tags.highway) score *= 0.6;
-      if (score < bestScore) {
-        bestScore = score;
-        var t = el.tags || {};
-        best = { lat: lat, lng: lng, name: (t.brand && t.name && t.name.indexOf(t.brand) < 0 ? t.brand + ' ' + t.name : (t.name || t.brand || KINDS[kind].label)).slice(0, 40) };
-      }
+  searchErrors = [];
+  var q = '[out:json][timeout:10];(' + KINDS[kind].q(pos.lat.toFixed(5), pos.lng.toFixed(5)) + ');out center 60;';
+  return overpass(q, 0)
+    .then(function (data) {
+      var els = (data.elements || []).map(function (el) {
+        return { lat: el.lat != null ? el.lat : (el.center && el.center.lat), lng: el.lon != null ? el.lon : (el.center && el.center.lon), tags: el.tags || {} };
+      });
+      if (!els.length) searchErrors.push('OSM: 0 Treffer');
+      return els;
+    }, function () { return []; })
+    .then(function (els) { return els.length ? els : nominatim(kind, pos); })
+    .then(function (els) {
+      if (!els.length) { if (searchErrors.length && searchErrors.every(function (e) { return e.indexOf('Treffer') < 0; })) throw new Error('alle Dienste'); return null; }
+      return pickBest(kind, pos, els);
     });
-    return best;
+}
+function pickBest(kind, pos, els) {
+  var best = null, bestScore = Infinity;
+  els.forEach(function (el) {
+    if (typeof el.lat !== 'number' || typeof el.lng !== 'number' || isNaN(el.lat) || isNaN(el.lng)) return;
+    var p = { lat: el.lat, lng: el.lng };
+    var score = hav(pos, p);
+    // Bevorzugt Ziele in Fahrtrichtung
+    if (pos.heading != null && !isNaN(pos.heading) && (pos.speed || 0) > 15) {
+      var diff = Math.abs(((bearing(pos, p) - pos.heading) + 540) % 360 - 180);
+      if (diff > 100) score *= 2.5; else if (diff > 60) score *= 1.4;
+    }
+    // Rastplätze leicht bevorzugen
+    if (kind === 'pause' && el.tags.highway) score *= 0.6;
+    if (score < bestScore) {
+      bestScore = score;
+      var t = el.tags;
+      var nm = t.brand && t.name && t.name.indexOf(t.brand) < 0 ? t.brand + ' ' + t.name : (t.name || t.brand || KINDS[kind].label);
+      best = { lat: el.lat, lng: el.lng, name: String(nm).slice(0, 40) };
+    }
   });
+  return best;
+}
+function nominatim(kind, pos) {
+  var dLat = 0.14, dLng = 0.22;   // ca. 15 km um dich herum
+  var vb = [pos.lng - dLng, pos.lat + dLat, pos.lng + dLng, pos.lat - dLat].map(function (n) { return n.toFixed(4); }).join(',');
+  var url = 'https://nominatim.openstreetmap.org/search?format=jsonv2&limit=40&bounded=1&extratags=1&accept-language=de' +
+    '&q=' + encodeURIComponent(NOMINATIM_Q[kind]) + '&viewbox=' + vb;
+  return timedFetch(url, {}, 10000)
+    .then(function (r) { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); })
+    .then(function (list) {
+      if (!Array.isArray(list) || !list.length) { searchErrors.push('Nominatim: 0 Treffer'); return []; }
+      return list.map(function (x) {
+        var t = x.extratags || {};
+        return { lat: parseFloat(x.lat), lng: parseFloat(x.lon), tags: { name: x.name || t.name, brand: t.brand, highway: x.category === 'highway' ? x.type : null } };
+      });
+    }, function (e) { searchErrors.push('Nominatim: ' + errText(e)); return []; });
+}
+function timedFetch(url, opts, ms) {
+  var ctrl = typeof AbortController !== 'undefined' ? new AbortController() : null;
+  var timer = setTimeout(function () { if (ctrl) ctrl.abort(); }, ms);
+  if (ctrl) opts.signal = ctrl.signal;
+  return fetch(url, opts).then(function (r) { clearTimeout(timer); return r; }, function (e) { clearTimeout(timer); throw e; });
+}
+function errText(e) {
+  if (!e) return 'Fehler';
+  if (e.name === 'AbortError') return 'Zeitüberschreitung';
+  if (/HTTP/.test(e.message)) return e.message;
+  return 'kein Zugriff';
 }
 function overpass(q, i) {
-  // jeder Server bekommt max. 9 s, dann kommt der nächste dran
-  var ctrl = typeof AbortController !== 'undefined' ? new AbortController() : null;
-  var timer = setTimeout(function () { if (ctrl) ctrl.abort(); }, 9000);
-  return fetch(OVERPASS[i], { method: 'POST', body: 'data=' + encodeURIComponent(q),
-      headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, signal: ctrl ? ctrl.signal : undefined })
+  // jeder Server bekommt max. 7 s, dann kommt der nächste dran
+  return timedFetch(OVERPASS[i], { method: 'POST', body: 'data=' + encodeURIComponent(q),
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' } }, 7000)
     .then(function (r) { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); })
-    .then(function (j) { clearTimeout(timer); return j; },
-      function (e) { clearTimeout(timer); if (i + 1 < OVERPASS.length) return overpass(q, i + 1); throw e; });
+    .catch(function (e) {
+      searchErrors.push(OVERPASS[i].split('/')[2].split('.').slice(-2, -1)[0] + ': ' + errText(e));
+      if (i + 1 < OVERPASS.length) return overpass(q, i + 1);
+      throw e;
+    });
 }
 
 /* ---------- App-Ablauf ---------- */
