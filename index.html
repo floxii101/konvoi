@@ -712,6 +712,10 @@ function pickBest(kind, pos, els) {
   var best = null, bestScore = Infinity;
   els.forEach(function (el) {
     if (typeof el.lat !== 'number' || typeof el.lng !== 'number' || isNaN(el.lat) || isNaN(el.lng)) return;
+    // private / interne Orte überspringen (Firmen-Tankstellen, Kundenparkplätze …)
+    var acc = String(el.tags.access || '').toLowerCase();
+    if (/^(private|no|customers|delivery|permit|agricultural)$/.test(acc)) return;
+    if (/\b(intern|privat|betriebs|werks)/i.test(el.tags.name || '')) return;
     var p = { lat: el.lat, lng: el.lng };
     var score = hav(pos, p);
     // Bevorzugt Ziele in Fahrtrichtung
@@ -741,7 +745,7 @@ function nominatim(kind, pos) {
       if (!Array.isArray(list) || !list.length) { searchErrors.push('Nominatim: 0 Treffer'); return []; }
       return list.map(function (x) {
         var t = x.extratags || {};
-        return { lat: parseFloat(x.lat), lng: parseFloat(x.lon), tags: { name: x.name || t.name, brand: t.brand, highway: x.category === 'highway' ? x.type : null } };
+        return { lat: parseFloat(x.lat), lng: parseFloat(x.lon), tags: { name: x.name || t.name, brand: t.brand, access: t.access, highway: x.category === 'highway' ? x.type : null } };
       });
     }, function (e) { searchErrors.push('Nominatim: ' + errText(e)); return []; });
 }
